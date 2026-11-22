@@ -6,7 +6,7 @@ It shows how access policy rules, segment groups, application segments (with the
 
 - `zpa-explorer.html`: a self-contained web app. Drag boxes around, click one to highlight everything upstream and downstream of it, search by name, domain or port, pan and zoom. No network or dependencies needed to open it.
 - `zpa-map.svg` / `zpa-map.png` / `zpa-map.dot`: a static Graphviz diagram (needs Graphviz installed).
-- A change report against the previous run: segments, server groups and rules added, removed or modified, plus warnings (for example a server group with no connector group).
+- A change report against the previous run: segments, servers, server groups and rules added, removed or modified, plus warnings (for example a server group with no connector group, or a server that is in no server group).
 
 ## Read-only
 
@@ -14,7 +14,7 @@ The skill only reads your tenant. A `PreToolUse` hook (`scripts/readonly-guard.j
 
 `zpa_list_segment_groups`, `zpa_list_application_segments`, `zpa_list_server_groups`, `zpa_list_application_servers`, `zpa_list_access_policy_rules`
 
-It is an allowlist, so new or renamed write tools are denied by default. Limits: it only covers Zscaler MCP tools, so it does not stop a `curl` to the Zscaler API from Bash; the skill text forbids that but nothing enforces it.
+It is an allowlist, so new or renamed write tools are denied by default. Limits: it only covers Zscaler MCP tools, so it does not stop a `curl` to the Zscaler API from Bash; the skill text forbids that but nothing enforces it. The guard script has been tested on its own (allowed and blocked tool names, bad input). After installing, confirm once that Claude Code runs the frontmatter hook: run `/zpa-map`, then ask it to activate the ZIA config and check the call is blocked.
 
 ## Requirements
 
@@ -28,24 +28,28 @@ It is an allowlist, so new or renamed write tools are denied by default. Limits:
 git clone https://github.com/wintermute000/zpa-map ~/.claude/skills/zpa-map
 ```
 
-Restart Claude Code (or reload skills) so it picks up the skill. If you install somewhere else, update the hook path in the `SKILL.md` frontmatter and the `build.js` command in the steps.
+Restart Claude Code (or reload skills) so it picks up the skill. The `SKILL.md` frontmatter hook and the build command assume the path `~/.claude/skills/zpa-map`. If you install somewhere else, update both.
 
 ## Use
 
 In a folder where you want the output, tell Claude "refresh the ZPA map" or run `/zpa-map`. Claude will:
 
-1. Copy the existing `zpa-data.json` to `zpa-data.prev.json`.
+1. Copy the existing `zpa-data.json` (if any) to `zpa-data.prev.json`, which the change report compares against. The first run has nothing to compare.
 2. Pull the five datasets from the tenant (read-only, `page_size: 500`).
 3. Write `zpa-data.json`, a plain snapshot of the tenant.
 4. Run `scripts/build.js`, which writes the outputs and prints the change report and warnings.
 
-Open `zpa-explorer.html` in a browser. Boxes you drag keep their positions across rebuilds (stored in that browser, keyed by box name). "Reset layout" restores the generated layout.
+Outputs are written to the folder you run it in, not into the skill folder. Open `zpa-explorer.html` in a browser. Boxes you drag keep their positions across rebuilds (stored in that browser, keyed by box name). "Reset layout" restores the generated layout.
 
 To rebuild from an existing snapshot without re-pulling, for example after editing it by hand:
 
 ```
 node ~/.claude/skills/zpa-map/scripts/build.js zpa-data.json . --prev zpa-data.prev.json
 ```
+
+## Data format
+
+`zpa-data.json` is a plain JSON snapshot: `segmentGroups`, `segments` (with `serverGroups`, domains and ports), `serverGroups` (connector groups and static vs dynamic), `servers`, and `rules` (action, who, targets). The exact schema and an example are at the bottom of `SKILL.md`. Snapshots from earlier versions of the skill still build.
 
 ## Files
 
@@ -58,7 +62,7 @@ node ~/.claude/skills/zpa-map/scripts/build.js zpa-data.json . --prev zpa-data.p
 
 ## Data and privacy
 
-`zpa-data.json` and the generated files contain your internal hostnames, IPs and policy structure. They are listed in `.gitignore` so they are not committed by accident. Keep them local.
+`zpa-data.json` and the generated files contain your internal hostnames, IPs and policy structure, so keep them local. They are written to your working folder, not this repository. The `.gitignore` in the skill folder is only a safety net in case you run the build from inside a clone. If you commit your own outputs, use a private repository.
 
 ## Known gotcha
 
