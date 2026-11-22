@@ -2,7 +2,7 @@
 
 A Claude Code skill that draws your Zscaler Private Access (ZPA) tenant as an interactive map and a static diagram, and tells you what changed each time you run it.
 
-It shows how access policy rules, segment groups, application segments (with the apps and ports inside them), server groups and app connector groups connect.
+It shows how access policy rules, segment groups, application segments (with the apps and ports inside them), server groups, the individual servers in them and app connector groups connect.
 
 - `zpa-explorer.html`: a self-contained web app. Drag boxes around, click one to highlight everything upstream and downstream of it, search by name, domain or port, pan and zoom. No network or dependencies needed to open it.
 - `zpa-map.svg` / `zpa-map.png` / `zpa-map.dot`: a static Graphviz diagram (needs Graphviz installed).
@@ -10,9 +10,9 @@ It shows how access policy rules, segment groups, application segments (with the
 
 ## Read-only
 
-The skill only reads your tenant. A `PreToolUse` hook (`scripts/readonly-guard.js`) is registered in the skill's frontmatter and blocks every Zscaler MCP call except four list tools:
+The skill only reads your tenant. A `PreToolUse` hook (`scripts/readonly-guard.js`) is registered in the skill's frontmatter and blocks every Zscaler MCP call except five list tools:
 
-`zpa_list_segment_groups`, `zpa_list_application_segments`, `zpa_list_server_groups`, `zpa_list_access_policy_rules`
+`zpa_list_segment_groups`, `zpa_list_application_segments`, `zpa_list_server_groups`, `zpa_list_application_servers`, `zpa_list_access_policy_rules`
 
 It is an allowlist, so new or renamed write tools are denied by default. Limits: it only covers Zscaler MCP tools, so it does not stop a `curl` to the Zscaler API from Bash; the skill text forbids that but nothing enforces it.
 
@@ -35,7 +35,7 @@ Restart Claude Code (or reload skills) so it picks up the skill. If you install 
 In a folder where you want the output, tell Claude "refresh the ZPA map" or run `/zpa-map`. Claude will:
 
 1. Copy the existing `zpa-data.json` to `zpa-data.prev.json`.
-2. Pull the four datasets from the tenant (read-only, `page_size: 500`).
+2. Pull the five datasets from the tenant (read-only, `page_size: 500`).
 3. Write `zpa-data.json`, a plain snapshot of the tenant.
 4. Run `scripts/build.js`, which writes the outputs and prints the change report and warnings.
 

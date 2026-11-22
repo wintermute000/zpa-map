@@ -1,7 +1,7 @@
 ---
 name: zpa-map
 description: Rebuild the ZPA map from the live tenant. Pulls segment groups, app segments, server groups and access policy rules through the Zscaler MCP plugin (read-only), then generates an interactive HTML explorer (drag boxes, click to highlight a chain) plus a static Graphviz diagram, and reports what changed since the last run. Use when asked to draw, refresh, update or diff the ZPA diagram or segment map.
-allowed-tools: mcp__plugin_zscaler_zs__zpa_list_segment_groups mcp__plugin_zscaler_zs__zpa_list_application_segments mcp__plugin_zscaler_zs__zpa_list_server_groups mcp__plugin_zscaler_zs__zpa_list_access_policy_rules
+allowed-tools: mcp__plugin_zscaler_zs__zpa_list_segment_groups mcp__plugin_zscaler_zs__zpa_list_application_segments mcp__plugin_zscaler_zs__zpa_list_server_groups mcp__plugin_zscaler_zs__zpa_list_access_policy_rules mcp__plugin_zscaler_zs__zpa_list_application_servers
 hooks:
   PreToolUse:
     - matcher: "mcp__plugin_zscaler_zs__.*"
@@ -16,7 +16,7 @@ Snapshot the tenant into one JSON file, then build outputs from it with a script
 
 ## Hard rules
 
-- **Read-only, enforced.** A `PreToolUse` hook in this skill's frontmatter (`scripts/readonly-guard.js`) blocks every Zscaler MCP call except the four list tools below, so a write attempt fails with an error instead of reaching the tenant. It is an allowlist: new or renamed tools are denied by default. Do not try to work around a block. The hook only covers Zscaler MCP tools, so also never call the Zscaler API through Bash/curl. Use only the `list`/`get` tools below. Never call any `zpa_create_*`, `zpa_update_*`, `zpa_delete_*`, `zpa_bulk_*` or any `zia_*` write tool, even if asked mid-run. If the user wants a change made to the tenant, stop and say it is outside this skill.
+- **Read-only, enforced.** A `PreToolUse` hook in this skill's frontmatter (`scripts/readonly-guard.js`) blocks every Zscaler MCP call except the five list tools below, so a write attempt fails with an error instead of reaching the tenant. It is an allowlist: new or renamed tools are denied by default. Do not try to work around a block. The hook only covers Zscaler MCP tools, so also never call the Zscaler API through Bash/curl. Use only the `list`/`get` tools below. Never call any `zpa_create_*`, `zpa_update_*`, `zpa_delete_*`, `zpa_bulk_*` or any `zia_*` write tool, even if asked mid-run. If the user wants a change made to the tenant, stop and say it is outside this skill.
 - The output contains internal hostnames, IPs and policy structure. Keep it as local files. Do not publish it as an artifact or paste it anywhere external unless the user asks.
 - Do not put secrets in the data file. The rule/segment queries below do not return any; keep it that way.
 
@@ -24,16 +24,17 @@ Snapshot the tenant into one JSON file, then build outputs from it with a script
 
 Use the current directory unless the user names one. If `zpa-data.json` already exists there, copy it to `zpa-data.prev.json` first (overwrite the old prev). That file is what the change report compares against.
 
-## Step 2: pull the four datasets
+## Step 2: pull the five datasets
 
-All four calls need `page_size: 500`. The default page silently returns only a partial list (a real run returned 19 of 44 segments with no error). After each pull, sanity check the count with a second call using `query: "length(@)"` if the result looks smaller than expected.
+All five calls need `page_size: 500`. The default page silently returns only a partial list (a real run returned 19 of 44 segments with no error). After each pull, sanity check the count with a second call using `query: "length(@)"` if the result looks smaller than expected.
 
 Tool prefix: `mcp__plugin_zscaler_zs__`
 
 1. `zpa_list_segment_groups`, `page_size: 500`, `query: "[*].name"`
-2. `zpa_list_application_segments`, `page_size: 500`, `query: "[*].{n:name,g:segment_group_name,s:server_groups[0].name,d:domain_names,t:tcp_port_ranges,u:udp_port_ranges,on:enabled}"`
-3. `zpa_list_server_groups`, `page_size: 500`, `query: "[*].{n:name,c:app_connector_groups[*].name}"`
-4. `zpa_list_access_policy_rules`, `page_size: 500`, `query: "[*].{o:rule_order,n:name,a:action,off:disabled,tgt:conditions[].operands[?object_type=='APP_GROUP' || object_type=='APP'][].[object_type,name],who:conditions[].operands[?object_type!='APP_GROUP' && object_type!='APP'][].[object_type,name,idp_name]}"`
+2. `zpa_list_application_segments`, `page_size: 500`, `query: "[*].{n:name,g:segment_group_name,s:server_groups[*].name,d:domain_names,t:tcp_port_ranges,u:udp_port_ranges,on:enabled}"`
+3. `zpa_list_server_groups`, `page_size: 500`, `query: "[*].{id:id,n:name,dyn:dynamic_discovery,c:app_connector_groups[*].name}"`
+4. `zpa_list_application_servers`, `page_size: 500`, `query: "[*].{n:name,a:address,on:enabled,g:app_server_group_ids}"`
+5. `zpa_list_access_policy_rules`, `page_size: 500`, `query: "[*].{o:rule_order,n:name,a:action,off:disabled,tgt:conditions[].operands[?object_type=='APP_GROUP' || object_type=='APP'][].[object_type,name],who:conditions[].operands[?object_type!='APP_GROUP' && object_type!='APP'][].[object_type,name,idp_name]}"`
 
 If a result is too big to show and the tool prints a file path for the full output, read that file (for example with `node -e`) instead of retyping or re-running the call.
 
@@ -43,9 +44,10 @@ Schema (see the example at the bottom):
 
 - `generated`: today's date, `YYYY-MM-DD`
 - `segmentGroups`: array of names (from call 1)
-- `segments`: `{name, group, serverGroup, domains[], tcp[], udp[]}` from call 2 (`n, g, s, d, t, u`). `tcp`/`udp` stay as ZPA gives them: a flat list of from/to pairs, `["22","22","80","80"]`. `serverGroup` is `null` if the segment has none. Skip segments where `on` is false only if the user asks; otherwise keep them.
-- `serverGroups`: object mapping server group name to an array of connector group names (call 3). Empty array when none.
-- `rules`: `{order, name, action, who, targets[], disabled}` from call 4, sorted by `o` as a number.
+- `segments`: `{name, group, serverGroups[], domains[], tcp[], udp[]}` from call 2 (`n, g, s, d, t, u`). `tcp`/`udp` stay as ZPA gives them: a flat list of from/to pairs, `["22","22","80","80"]`. `serverGroups` is an array of server group names (a segment can have several; empty if none). Skip segments where `on` is false only if the user asks; otherwise keep them.
+- `serverGroups`: object mapping server group name to `{connectorGroups[], dynamic}` (call 3: `c` and `dyn`). `connectorGroups` is empty when none. `dynamic` is `true` for dynamic discovery, `false` for static servers.
+- `servers`: individual application servers from call 4, `{name, address, enabled, groups[]}`. `groups` are server group names: call 4's `g` holds server group IDs, so translate each ID to a name using the `id` values from call 3. A server in no group has `groups: []` (the builder warns that nothing can reach it). The server group list call does not expand its servers, so always take membership from call 4.
+- `rules`: `{order, name, action, who, targets[], disabled}` from call 5, sorted by `o` as a number.
   - `action`: `"ALLOW"` or `"DENY"`.
   - `disabled`: `true` when `off` is `"1"`.
   - `targets`: segment group names from `APP_GROUP` entries, and `"app:<segment name>"` for `APP` entries. Leave `[]` when the rule has no app condition (it then applies to any app).
@@ -79,7 +81,8 @@ Omit `--prev` on the first run. This writes `zpa-explorer.html`, `zpa-map.dot`, 
 
 - Layout positions the user drags in the explorer are saved in that browser, keyed by box name. After a rebuild, existing boxes keep their positions and new ones are placed automatically. "Reset layout" restores the generated layout.
 - `dot` (Graphviz) is optional. Without it the explorer still works but starts with an unsorted layout.
-- Segment names must be unique; the builder warns on duplicates.
+- Segment names and server names must each be unique; the builder warns on duplicates.
+- Older snapshots (`serverGroup` string, server groups as plain arrays) still build; the next change report may show every server group as changed once.
 
 ## Example `zpa-data.json`
 
@@ -88,10 +91,13 @@ Omit `--prev` on the first run. This writes `zpa-explorer.html`, `zpa-map.dot`, 
   "generated": "2026-11-22",
   "segmentGroups": ["Web SegGrp", "Zscaler Deception"],
   "segments": [
-    {"name": "Intranet Wiki", "group": "Web SegGrp", "serverGroup": "Web SrvGrp",
+    {"name": "Intranet Wiki", "group": "Web SegGrp", "serverGroups": ["Web SrvGrp"],
      "domains": ["wiki.example.com"], "tcp": ["80","80","443","443"], "udp": []}
   ],
-  "serverGroups": {"Web SrvGrp": ["Web ConnGrp"]},
+  "serverGroups": {"Web SrvGrp": {"connectorGroups": ["Web ConnGrp"], "dynamic": false}},
+  "servers": [
+    {"name": "wiki-01", "address": "10.0.0.20", "enabled": true, "groups": ["Web SrvGrp"]}
+  ],
   "rules": [
     {"order": 13, "name": "Allow Staff to Web Apps", "action": "ALLOW",
      "who": "SCIM groups: Okta", "targets": ["Web SegGrp"], "disabled": false}

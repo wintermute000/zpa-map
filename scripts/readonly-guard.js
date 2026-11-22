@@ -8,6 +8,7 @@ const ALLOWED = new Set([
   "mcp__plugin_zscaler_zs__zpa_list_application_segments",
   "mcp__plugin_zscaler_zs__zpa_list_server_groups",
   "mcp__plugin_zscaler_zs__zpa_list_access_policy_rules",
+  "mcp__plugin_zscaler_zs__zpa_list_application_servers",
 ]);
 let raw = "";
 process.stdin.on("data", c => raw += c);

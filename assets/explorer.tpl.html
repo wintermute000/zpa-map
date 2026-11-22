@@ -8,20 +8,20 @@
 :root{
   --bg:#f6f7f9; --panel:#ffffff; --fg:#1b2430; --muted:#5d6b7d; --line:#cfd6df;
   --sg:#dbe7ff; --sg-b:#5b86d6; --seg:#ffffff; --seg-b:#6b7a8f; --seg-head:#e9edf3;
-  --srv:#dff3e6; --srv-b:#3f9a63; --con:#fdebd3; --con-b:#c9822b;
+  --srv:#dff3e6; --srv-b:#3f9a63; --con:#fdebd3; --con-b:#c9822b; --host:#e2f3f6; --host-b:#3a8fa3;
   --idle:#f0f1f3; --idle-b:#a3acb8; --rule:#f3ecfb; --rule-b:#8a5cc7;
   --allow:#2e8b57; --deny:#c0392b; --edge:#8b97a8; --accent:#2f5fc4; --hit:#ffd84d;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0f141b; --panel:#171e28; --fg:#e4e9f0; --muted:#97a3b3; --line:#2c3644;
   --sg:#1d2c4d; --sg-b:#6f98ec; --seg:#1a222d; --seg-b:#7d8ba0; --seg-head:#252f3d;
-  --srv:#163424; --srv-b:#4fb67d; --con:#3a2a14; --con-b:#e0993f;
+  --srv:#163424; --srv-b:#4fb67d; --con:#3a2a14; --con-b:#e0993f; --host:#14333a; --host-b:#5bb5cb;
   --idle:#1b222c; --idle-b:#5a6677; --rule:#2a2140; --rule-b:#a98be0;
   --allow:#4fb67d; --deny:#ef6b5b; --edge:#6b788a; --accent:#7ea4f2; --hit:#b38f00; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f141b; --panel:#171e28; --fg:#e4e9f0; --muted:#97a3b3; --line:#2c3644;
   --sg:#1d2c4d; --sg-b:#6f98ec; --seg:#1a222d; --seg-b:#7d8ba0; --seg-head:#252f3d;
-  --srv:#163424; --srv-b:#4fb67d; --con:#3a2a14; --con-b:#e0993f;
+  --srv:#163424; --srv-b:#4fb67d; --con:#3a2a14; --con-b:#e0993f; --host:#14333a; --host-b:#5bb5cb;
   --idle:#1b222c; --idle-b:#5a6677; --rule:#2a2140; --rule-b:#a98be0;
   --allow:#4fb67d; --deny:#ef6b5b; --edge:#6b788a; --accent:#7ea4f2; --hit:#b38f00; color-scheme:dark}
 *{box-sizing:border-box}
@@ -49,6 +49,7 @@ svg.panning{cursor:grabbing}
 .k-seg rect.head{fill:var(--seg-head)}
 .k-srv rect.box{fill:var(--srv);stroke:var(--srv-b)}
 .k-con rect.box{fill:var(--con);stroke:var(--con-b)}
+.k-host rect.box{fill:var(--host);stroke:var(--host-b)}
 text{fill:var(--fg);font-size:13px;pointer-events:none}
 .t-h{font-weight:600;font-size:14px}
 .t-s{fill:var(--muted);font-size:12px}
@@ -77,6 +78,7 @@ text{fill:var(--fg);font-size:13px;pointer-events:none}
     <span><i style="background:var(--sg);border-color:var(--sg-b)"></i>Segment group</span>
     <span><i style="background:var(--seg);border-color:var(--seg-b)"></i>App segment</span>
     <span><i style="background:var(--srv);border-color:var(--srv-b)"></i>Server group</span>
+    <span><i style="background:var(--host);border-color:var(--host-b)"></i>Server</span>
     <span><i style="background:var(--con);border-color:var(--con-b)"></i>Connector group</span>
     <span><i style="background:var(--allow);border-color:var(--allow);height:3px;vertical-align:3px"></i>Allow</span>
     <span><i style="background:var(--deny);border-color:var(--deny);height:3px;vertical-align:3px"></i>Deny</span>
@@ -94,8 +96,8 @@ text{fill:var(--fg);font-size:13px;pointer-events:none}
 </main>
 <script>
 const D=/*__DATA__*/;
-const SEGS=D.segments.map(s=>[s.name,s.group,s.serverGroup,s.domains,s.tcp,s.udp]);
-const SEGGRPS=D.segmentGroups,SRVGRPS=D.serverGroups;
+const SEGS=D.segments.map(s=>[s.name,s.group,s.serverGroups,s.domains,s.tcp,s.udp]);
+const SEGGRPS=D.segmentGroups,SRVGRPS=D.serverGroups,SERVERS=D.servers||[];
 const RULES=D.rules.map(r=>[r.order,r.name+(r.disabled?" (disabled)":""),r.action,r.who,r.targets]);
 const ORDER=/*__ORDER__*/;
 const SVGNS="http://www.w3.org/2000/svg";
@@ -122,12 +124,18 @@ for(const [n,sg,sv,doms,tcp,udp] of SEGS){
   lines.push({parts:[{t:"TCP "+(portsStr(tcp)||"-")+(udp.length?"  |  UDP "+portsStr(udp):""),c:"t-s",f:"s"}]});
   addNode({id:id("seg",n),kind:"seg",lines,key:(n+" "+doms.join(" ")+" "+portsStr(tcp)+" "+portsStr(udp)).toLowerCase(),col:2});
   edges.push({s:id("sg",sg),t:id("seg",n),cls:""});
-  if(sv)edges.push({s:id("seg",n),t:id("srv",sv),cls:""});
+  for(const g of sv)edges.push({s:id("seg",n),t:id("srv",g),cls:""});
 }
-for(const [g,cons] of Object.entries(SRVGRPS)){
-  addNode({id:id("srv",g),kind:"srv",lines:[{parts:[{t:g,c:"t-h",f:"h"}]}],key:g.toLowerCase(),col:3});
+for(const h of SERVERS){
+  addNode({id:id("host",h.name),kind:"host",lines:[{parts:[{t:h.name,c:"t-h",f:"h"}]},{parts:[{t:h.address+(h.enabled===false?" (disabled)":""),c:"t-s",f:"s"}]}],key:(h.name+" "+h.address).toLowerCase(),col:4});
+  for(const g of h.groups||[])edges.push({s:id("srv",g),t:id("host",h.name),cls:""});
+}
+for(const [g,o] of Object.entries(SRVGRPS)){
+  const cons=o.connectorGroups||[];
+  const note=o.dynamic===false?"static servers":(o.dynamic===true?"dynamic discovery":"");
+  addNode({id:id("srv",g),kind:"srv",lines:[{parts:[{t:g,c:"t-h",f:"h"}]}].concat(note?[{parts:[{t:note,c:"t-s",f:"s"}]}]:[]),key:g.toLowerCase(),col:3});
   for(const c of cons){
-    if(!byId[id("con",c)])addNode({id:id("con",c),kind:"con",lines:[{parts:[{t:c,c:"t-h",f:"h"}]}],key:c.toLowerCase(),col:4});
+    if(!byId[id("con",c)])addNode({id:id("con",c),kind:"con",lines:[{parts:[{t:c,c:"t-h",f:"h"}]}],key:c.toLowerCase(),col:5});
     edges.push({s:id("srv",g),t:id("con",c),cls:""});
   }
 }
@@ -150,7 +158,7 @@ for(const e of edges){adjOut[e.s].push(e.t);adjIn[e.t].push(e.s)}
 // layout
 const GAPX=110,GAPY=14;
 function layout(){
-  const cols=[[],[],[],[],[]];
+  const cols=[[],[],[],[],[],[]];
   for(const n of nodes)cols[n.col].push(n);
   let x=20;
   const heights=[];
