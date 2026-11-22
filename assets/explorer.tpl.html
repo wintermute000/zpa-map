@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZPA Segment Explorer</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --fg:#1b2430; --muted:#5d6b7d; --line:#cfd6df;
+  --sg:#dbe7ff; --sg-b:#5b86d6; --seg:#ffffff; --seg-b:#6b7a8f; --seg-head:#e9edf3;
+  --srv:#dff3e6; --srv-b:#3f9a63; --con:#fdebd3; --con-b:#c9822b;
+  --idle:#f0f1f3; --idle-b:#a3acb8; --rule:#f3ecfb; --rule-b:#8a5cc7;
+  --allow:#2e8b57; --deny:#c0392b; --edge:#8b97a8; --accent:#2f5fc4; --hit:#ffd84d;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f141b; --panel:#171e28; --fg:#e4e9f0; --muted:#97a3b3; --line:#2c3644;
+  --sg:#1d2c4d; --sg-b:#6f98ec; --seg:#1a222d; --seg-b:#7d8ba0; --seg-head:#252f3d;
+  --srv:#163424; --srv-b:#4fb67d; --con:#3a2a14; --con-b:#e0993f;
+  --idle:#1b222c; --idle-b:#5a6677; --rule:#2a2140; --rule-b:#a98be0;
+  --allow:#4fb67d; --deny:#ef6b5b; --edge:#6b788a; --accent:#7ea4f2; --hit:#b38f00; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141b; --panel:#171e28; --fg:#e4e9f0; --muted:#97a3b3; --line:#2c3644;
+  --sg:#1d2c4d; --sg-b:#6f98ec; --seg:#1a222d; --seg-b:#7d8ba0; --seg-head:#252f3d;
+  --srv:#163424; --srv-b:#4fb67d; --con:#3a2a14; --con-b:#e0993f;
+  --idle:#1b222c; --idle-b:#5a6677; --rule:#2a2140; --rule-b:#a98be0;
+  --allow:#4fb67d; --deny:#ef6b5b; --edge:#6b788a; --accent:#7ea4f2; --hit:#b38f00; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+h1{font:600 16px/1.2 "Space Grotesk",Inter,system-ui,sans-serif;margin:0}
+input[type=search]{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);width:min(260px,100%)}
+button{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);cursor:pointer}
+button:hover{border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1.5px solid}
+#status{font-size:12px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+main{flex:1;min-height:0;position:relative}
+svg{width:100%;height:100%;display:block;touch-action:none;cursor:grab;user-select:none}
+svg.panning{cursor:grabbing}
+.node{cursor:move}
+.node rect.box{stroke-width:1.5}
+.k-rule rect.box{fill:var(--rule);stroke:var(--rule-b)}
+.k-rule.deny rect.box{stroke:var(--deny)}
+.k-sg rect.box{fill:var(--sg);stroke:var(--sg-b)}
+.k-sg.idle rect.box{fill:var(--idle);stroke:var(--idle-b)}
+.k-seg rect.box{fill:var(--seg);stroke:var(--seg-b)}
+.k-seg rect.head{fill:var(--seg-head)}
+.k-srv rect.box{fill:var(--srv);stroke:var(--srv-b)}
+.k-con rect.box{fill:var(--con);stroke:var(--con-b)}
+text{fill:var(--fg);font-size:13px;pointer-events:none}
+.t-h{font-weight:600;font-size:14px}
+.t-s{fill:var(--muted);font-size:12px}
+.t-allow{fill:var(--allow);font-weight:700;font-size:11px}
+.t-deny{fill:var(--deny);font-weight:700;font-size:11px}
+.edge{fill:none;stroke:var(--edge);stroke-width:1.4;transition:opacity .12s}
+.edge.allow{stroke:var(--allow)}
+.edge.deny{stroke:var(--deny);stroke-dasharray:6 4}
+.edge.on{stroke-width:3}
+.dim{opacity:.1}
+.node.hit rect.box{stroke:var(--hit);stroke-width:4}
+.node{transition:opacity .12s}
+#hint{position:absolute;left:16px;bottom:12px;font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 10px;max-width:calc(100% - 32px)}
+</style>
+</head>
+<body>
+<header>
+  <h1>ZPA Segment Explorer</h1>
+  <span class="legend" id="gen"></span>
+  <input type="search" id="q" placeholder="Search name, domain, port" aria-label="Search">
+  <button id="fit">Fit</button>
+  <button id="reset">Reset layout</button>
+  <button id="clear">Clear highlight</button>
+  <div class="legend">
+    <span><i style="background:var(--rule);border-color:var(--rule-b)"></i>Access rule</span>
+    <span><i style="background:var(--sg);border-color:var(--sg-b)"></i>Segment group</span>
+    <span><i style="background:var(--seg);border-color:var(--seg-b)"></i>App segment</span>
+    <span><i style="background:var(--srv);border-color:var(--srv-b)"></i>Server group</span>
+    <span><i style="background:var(--con);border-color:var(--con-b)"></i>Connector group</span>
+    <span><i style="background:var(--allow);border-color:var(--allow);height:3px;vertical-align:3px"></i>Allow</span>
+    <span><i style="background:var(--deny);border-color:var(--deny);height:3px;vertical-align:3px"></i>Deny</span>
+  </div>
+  <div id="status" aria-live="polite"></div>
+</header>
+<main>
+  <svg id="svg" role="img" aria-label="ZPA segment graph">
+    <defs>
+      <marker id="a-edge" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker>
+    </defs>
+    <g id="world"><g id="edges"></g><g id="nodes"></g></g>
+  </svg>
+  <div id="hint">Drag boxes to move. Click a box to highlight everything upstream and downstream of it. Click empty space to clear. Drag the background to pan, scroll to zoom.</div>
+</main>
+<script>
+const D=/*__DATA__*/;
+const SEGS=D.segments.map(s=>[s.name,s.group,s.serverGroup,s.domains,s.tcp,s.udp]);
+const SEGGRPS=D.segmentGroups,SRVGRPS=D.serverGroups;
+const RULES=D.rules.map(r=>[r.order,r.name+(r.disabled?" (disabled)":""),r.action,r.who,r.targets]);
+const ORDER=/*__ORDER__*/;
+const SVGNS="http://www.w3.org/2000/svg";
+const id=(p,s)=>p+"_"+s.replace(/[^A-Za-z0-9]/g,"_");
+const portsStr=a=>{const r=[];for(let i=0;i<a.length;i+=2){const f=+a[i],t=+(a[i+1]??a[i]);const l=r[r.length-1];if(l&&f===l[1]+1)l[1]=t;else r.push([f,t])}return r.map(([f,t])=>f===t?f:f+"-"+t).join(", ")};
+const ctx=document.createElement("canvas").getContext("2d");
+const FONTS={h:'600 14px Inter, system-ui, sans-serif',n:'13px Inter, system-ui, sans-serif',s:'12px Inter, system-ui, sans-serif',a:'700 11px Inter, system-ui, sans-serif'};
+const tw=(t,f)=>{ctx.font=FONTS[f];return ctx.measureText(t).width};
+const wrap=(t,max,f)=>{const out=[];let cur="";for(const w of t.split(" ")){const n=cur?cur+" "+w:w;if(tw(n,f)>max&&cur){out.push(cur);cur=w}else cur=n}if(cur)out.push(cur);return out};
+
+const nodes=[],edges=[],byId={};
+function addNode(n){byId[n.id]=n;nodes.push(n);return n}
+const used=new Set(SEGS.map(s=>s[1]));
+// rules
+for(const [o,n,a,w,t] of RULES){
+  const lines=[{parts:[{t:"#"+o+" "+n+"  ",c:"t-h",f:"h"},{t:a,c:a==="DENY"?"t-deny":"t-allow",f:"a"}]}];
+  for(const l of wrap(w,320,"s"))lines.push({parts:[{t:l,c:"t-s",f:"s"}]});
+  addNode({id:id("rule",String(o)),kind:"rule",deny:a==="DENY",lines,key:(o+" "+n+" "+w).toLowerCase(),col:0});
+}
+for(const g of SEGGRPS)addNode({id:id("sg",g),kind:"sg",idle:!used.has(g)&&!RULES.some(r=>r[4].includes(g)),lines:[{parts:[{t:g,c:"t-h",f:"h"}]}],key:g.toLowerCase(),col:1});
+for(const [n,sg,sv,doms,tcp,udp] of SEGS){
+  const lines=[{parts:[{t:n,c:"t-h",f:"h"}],head:true}];
+  for(const d of doms)lines.push({parts:[{t:d,c:"",f:"n"}]});
+  lines.push({parts:[{t:"TCP "+(portsStr(tcp)||"-")+(udp.length?"  |  UDP "+portsStr(udp):""),c:"t-s",f:"s"}]});
+  addNode({id:id("seg",n),kind:"seg",lines,key:(n+" "+doms.join(" ")+" "+portsStr(tcp)+" "+portsStr(udp)).toLowerCase(),col:2});
+  edges.push({s:id("sg",sg),t:id("seg",n),cls:""});
+  if(sv)edges.push({s:id("seg",n),t:id("srv",sv),cls:""});
+}
+for(const [g,cons] of Object.entries(SRVGRPS)){
+  addNode({id:id("srv",g),kind:"srv",lines:[{parts:[{t:g,c:"t-h",f:"h"}]}],key:g.toLowerCase(),col:3});
+  for(const c of cons){
+    if(!byId[id("con",c)])addNode({id:id("con",c),kind:"con",lines:[{parts:[{t:c,c:"t-h",f:"h"}]}],key:c.toLowerCase(),col:4});
+    edges.push({s:id("srv",g),t:id("con",c),cls:""});
+  }
+}
+for(const [o,n,a,w,t] of RULES)for(const x of t){
+  edges.push({s:id("rule",String(o)),t:x.startsWith("app:")?id("seg",x.slice(4)):id("sg",x),cls:a==="DENY"?"deny":"allow"});
+}
+const ids=new Set(nodes.map(n=>n.id));
+for(let i=edges.length-1;i>=0;i--)if(!ids.has(edges[i].s)||!ids.has(edges[i].t))edges.splice(i,1);
+// drop server groups with no segments and no connectors? keep all that exist.
+// sizes
+const PADX=12,PADY=9,LH=19;
+for(const n of nodes){
+  n.w=Math.ceil(Math.max(...n.lines.map(l=>l.parts.reduce((s,p)=>s+tw(p.t,p.f),0)))+PADX*2);
+  n.h=n.lines.length*LH+PADY*2-4;
+}
+const adjOut={},adjIn={};
+for(const n of nodes){adjOut[n.id]=[];adjIn[n.id]=[]}
+for(const e of edges){adjOut[e.s].push(e.t);adjIn[e.t].push(e.s)}
+
+// layout
+const GAPX=110,GAPY=14;
+function layout(){
+  const cols=[[],[],[],[],[]];
+  for(const n of nodes)cols[n.col].push(n);
+  let x=20;
+  const heights=[];
+  for(const c of cols){
+    c.sort((a,b)=>(ORDER[b.id]??0)-(ORDER[a.id]??0));
+    const w=Math.max(...c.map(n=>n.w));
+    c.forEach(n=>n.x=x);
+    x+=w+GAPX;
+    heights.push(c.reduce((s,n)=>s+n.h+GAPY,0));
+  }
+  const H=Math.max(...heights);
+  for(const c of cols){
+    const ys=c.map(n=>ORDER[n.id]??0),mx=Math.max(...Object.values(ORDER)),mn=Math.min(...Object.values(ORDER));
+    let prev=20-GAPY;
+    for(const n of c){
+      const want=20+((mx-(ORDER[n.id]??0))/(mx-mn||1))*H-n.h/2;
+      n.y=Math.max(prev+GAPY,want);
+      prev=n.y+n.h;
+    }
+  }
+}
+// render
+const svg=document.getElementById("svg"),world=document.getElementById("world"),gE=document.getElementById("edges"),gN=document.getElementById("nodes");
+const mk=(t,a={})=>{const e=document.createElementNS(SVGNS,t);for(const k in a)e.setAttribute(k,a[k]);return e};
+for(const e of edges){
+  e.el=mk("path",{class:"edge "+e.cls,"marker-end":"url(#a-edge)"});
+  gE.appendChild(e.el);
+}
+for(const n of nodes){
+  const g=mk("g",{class:"node k-"+n.kind+(n.deny?" deny":"")+(n.idle?" idle":""),"data-id":n.id,tabindex:"0"});
+  g.appendChild(mk("rect",{class:"box",width:n.w,height:n.h,rx:6}));
+  if(n.kind==="seg")g.appendChild(mk("rect",{class:"head",x:1,y:1,width:n.w-2,height:LH+PADY-3,rx:5}));
+  n.lines.forEach((l,i)=>{
+    const t=mk("text",{x:PADX,y:PADY+LH*i+13});
+    for(const p of l.parts){const s=mk("tspan",{class:p.c});s.textContent=p.t;t.appendChild(s)}
+    g.appendChild(t);
+  });
+  n.el=g;gN.appendChild(g);
+}
+function place(n){n.el.setAttribute("transform",`translate(${n.x},${n.y})`)}
+function path(e){
+  const a=byId[e.s],b=byId[e.t];
+  const x1=a.x+a.w,y1=a.y+a.h/2,x2=b.x,y2=b.y+b.h/2,dx=Math.max(50,Math.abs(x2-x1)/2);
+  e.el.setAttribute("d",`M${x1} ${y1}C${x1+dx} ${y1},${x2-dx} ${y2},${x2} ${y2}`);
+}
+function drawAll(){nodes.forEach(place);edges.forEach(path)}
+// view
+let view={x:0,y:0,k:1};
+const applyView=()=>world.setAttribute("transform",`translate(${view.x},${view.y}) scale(${view.k})`);
+function fit(){
+  const r=svg.getBoundingClientRect();
+  const x0=Math.min(...nodes.map(n=>n.x)),y0=Math.min(...nodes.map(n=>n.y));
+  const x1=Math.max(...nodes.map(n=>n.x+n.w)),y1=Math.max(...nodes.map(n=>n.y+n.h));
+  const k=Math.min(r.width/(x1-x0+60),r.height/(y1-y0+60),1.2);
+  view={k,x:(r.width-(x1-x0)*k)/2-x0*k,y:(r.height-(y1-y0)*k)/2-y0*k};
+  applyView();
+}
+// highlight
+let pinned=[],hover=null,query="";
+function chain(i){
+  const set=new Set([i]);
+  const down=[i],up=[i];
+  while(down.length){const c=down.pop();for(const t of adjOut[c])if(!set.has(t)){set.add(t);down.push(t)}}
+  while(up.length){const c=up.pop();for(const s of adjIn[c])if(!set.has(s)){set.add(s);up.push(s)}}
+  return set;
+}
+function refresh(){
+  let base=pinned.length?pinned:(hover?[hover]:[]);
+  const matches=query?nodes.filter(n=>n.key.includes(query)).map(n=>n.id):[];
+  if(query&&!pinned.length)base=matches;
+  const set=new Set();for(const b of base)for(const x of chain(b))set.add(x);
+  const on=set.size>0;
+  for(const n of nodes){n.el.classList.toggle("dim",on&&!set.has(n.id));n.el.classList.toggle("hit",!!query&&matches.includes(n.id))}
+  for(const e of edges){const act=on&&set.has(e.s)&&set.has(e.t);e.el.classList.toggle("dim",on&&!act);e.el.classList.toggle("on",act)}
+  const st=document.getElementById("status");
+  if(query)st.textContent=matches.length+" match"+(matches.length===1?"":"es");
+  else if(pinned.length){const n=byId[pinned[0]];st.textContent=n.lines[0].parts[0].t.trim()+" · "+(set.size-1)+" connected"}
+  else st.textContent=nodes.length+" boxes · "+edges.length+" connections";
+}
+// persistence
+const KEY="zpa-explorer-layout-v1";
+function save(){try{localStorage.setItem(KEY,JSON.stringify(Object.fromEntries(nodes.map(n=>[n.id,[n.x,n.y]]))))}catch(e){}}
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY)||"null");if(s)for(const n of nodes)if(s[n.id]){n.x=s[n.id][0];n.y=s[n.id][1]}}catch(e){}}
+// interaction
+let drag=null;
+const toWorld=(cx,cy)=>{const r=svg.getBoundingClientRect();return[(cx-r.left-view.x)/view.k,(cy-r.top-view.y)/view.k]};
+svg.addEventListener("pointerdown",ev=>{
+  const g=ev.target.closest(".node");
+  svg.setPointerCapture(ev.pointerId);
+  if(g){const n=byId[g.dataset.id],[wx,wy]=toWorld(ev.clientX,ev.clientY);drag={type:"node",n,ox:wx-n.x,oy:wy-n.y,sx:ev.clientX,sy:ev.clientY,moved:false}}
+  else{drag={type:"pan",sx:ev.clientX,sy:ev.clientY,vx:view.x,vy:view.y,moved:false};svg.classList.add("panning")}
+});
+svg.addEventListener("pointermove",ev=>{
+  if(!drag)return;
+  if(Math.hypot(ev.clientX-drag.sx,ev.clientY-drag.sy)>3)drag.moved=true;
+  if(drag.type==="node"&&drag.moved){
+    const [wx,wy]=toWorld(ev.clientX,ev.clientY);
+    drag.n.x=wx-drag.ox;drag.n.y=wy-drag.oy;place(drag.n);
+    for(const e of edges)if(e.s===drag.n.id||e.t===drag.n.id)path(e);
+  }else if(drag.type==="pan"){view.x=drag.vx+ev.clientX-drag.sx;view.y=drag.vy+ev.clientY-drag.sy;applyView()}
+});
+svg.addEventListener("pointerup",ev=>{
+  if(!drag)return;
+  svg.classList.remove("panning");
+  if(drag.type==="node"){
+    if(drag.moved)save();
+    else{const i=drag.n.id;pinned=pinned.length===1&&pinned[0]===i?[]:[i];refresh()}
+  }else if(!drag.moved){pinned=[];refresh()}
+  drag=null;
+});
+svg.addEventListener("wheel",ev=>{
+  ev.preventDefault();
+  const r=svg.getBoundingClientRect(),mx=ev.clientX-r.left,my=ev.clientY-r.top;
+  const k=Math.min(3,Math.max(0.1,view.k*Math.exp(-ev.deltaY*0.0015)));
+  view.x=mx-(mx-view.x)*(k/view.k);view.y=my-(my-view.y)*(k/view.k);view.k=k;applyView();
+},{passive:false});
+for(const n of nodes){
+  n.el.addEventListener("pointerenter",()=>{if(!drag){hover=n.id;refresh()}});
+  n.el.addEventListener("pointerleave",()=>{hover=null;if(!drag)refresh()});
+  n.el.addEventListener("keydown",ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();pinned=pinned[0]===n.id?[]:[n.id];refresh()}});
+}
+document.getElementById("q").addEventListener("input",ev=>{query=ev.target.value.trim().toLowerCase();refresh()});
+document.getElementById("fit").onclick=fit;
+document.getElementById("clear").onclick=()=>{pinned=[];query="";document.getElementById("q").value="";refresh()};
+document.getElementById("reset").onclick=()=>{try{localStorage.removeItem(KEY)}catch(e){}layout();drawAll();fit()};
+window.addEventListener("resize",fit);
+document.getElementById("gen").textContent=D.generated?"Tenant snapshot "+D.generated:"";
+layout();load();drawAll();fit();refresh();
+</script>
+</body>
+</html>

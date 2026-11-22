@@ -1,0 +1,6 @@
+# tenant snapshots and generated outputs contain internal hostnames, IPs and policy structure
+zpa-data*.json
+zpa-explorer.html
+zpa-map.dot
+zpa-map.svg
+zpa-map.png
