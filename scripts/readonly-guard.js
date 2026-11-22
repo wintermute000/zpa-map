@@ -3,12 +3,14 @@
 // made while the skill is active and blocks anything not on the allowlist.
 // Allowlist, not blocklist: a new or renamed write tool is denied by default.
 // Exit 2 = block the call and show stderr to Claude.
+// Server name varies by install ("zs" if you registered it yourself, a long
+// plugin_zscaler_... name from the default plugin), so match on the tool suffix.
 const ALLOWED = new Set([
-  "mcp__plugin_zscaler_zs__zpa_list_segment_groups",
-  "mcp__plugin_zscaler_zs__zpa_list_application_segments",
-  "mcp__plugin_zscaler_zs__zpa_list_server_groups",
-  "mcp__plugin_zscaler_zs__zpa_list_access_policy_rules",
-  "mcp__plugin_zscaler_zs__zpa_list_application_servers",
+  "zpa_list_segment_groups",
+  "zpa_list_application_segments",
+  "zpa_list_server_groups",
+  "zpa_list_access_policy_rules",
+  "zpa_list_application_servers",
 ]);
 let raw = "";
 process.stdin.on("data", c => raw += c);
@@ -18,8 +20,9 @@ process.stdin.on("end", () => {
     console.error("zpa-map guard: could not parse hook input, blocking to be safe");
     process.exit(2);
   }
-  if (ALLOWED.has(name)) process.exit(0);
-  console.error(`zpa-map is read-only. Blocked ${name}. Allowed tools: ${[...ALLOWED].map(t => t.split("__").pop()).join(", ")}. ` +
+  const m = name.match(/^mcp__.+?__(zpa_[a-z_]+)$/);
+  if (m && ALLOWED.has(m[1])) process.exit(0);
+  console.error(`zpa-map is read-only. Blocked ${name}. Allowed tools: ${[...ALLOWED].join(", ")}. ` +
     "Tell the user this change is outside the zpa-map skill; do not retry or use another tool to make it.");
   process.exit(2);
 });

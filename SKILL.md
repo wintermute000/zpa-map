@@ -1,10 +1,10 @@
 ---
 name: zpa-map
-description: Rebuild the ZPA map from the live tenant. Pulls segment groups, app segments, server groups and access policy rules through the Zscaler MCP plugin (read-only), then generates an interactive HTML explorer (drag boxes, click to highlight a chain) plus a static Graphviz diagram, and reports what changed since the last run. Use when asked to draw, refresh, update or diff the ZPA diagram or segment map.
+description: Rebuild the ZPA map from the live tenant. Pulls segment groups, app segments, server groups and access policy rules through the [Zscaler MCP server](https://github.com/zscaler/zscaler-mcp-server) (read-only), then generates an interactive HTML explorer (drag boxes, click to highlight a chain) plus a static Graphviz diagram, and reports what changed since the last run. Use when asked to draw, refresh, update or diff the ZPA diagram or segment map.
 allowed-tools: mcp__plugin_zscaler_zs__zpa_list_segment_groups mcp__plugin_zscaler_zs__zpa_list_application_segments mcp__plugin_zscaler_zs__zpa_list_server_groups mcp__plugin_zscaler_zs__zpa_list_access_policy_rules mcp__plugin_zscaler_zs__zpa_list_application_servers
 hooks:
   PreToolUse:
-    - matcher: "mcp__plugin_zscaler_zs__.*"
+    - matcher: "mcp__.*__(zpa|zia|ztw|zdx|zcc|zid)_.*"
       hooks:
         - type: command
           command: "node \"$HOME/.claude/skills/zpa-map/scripts/readonly-guard.js\""
@@ -28,7 +28,7 @@ Use the current directory unless the user names one. If `zpa-data.json` already 
 
 All five calls need `page_size: 500`. The default page silently returns only a partial list (a real run returned 19 of 44 segments with no error). After each pull, sanity check the count with a second call using `query: "length(@)"` if the result looks smaller than expected.
 
-Tool prefix: `mcp__plugin_zscaler_zs__`
+MCP server: https://github.com/zscaler/zscaler-mcp-server. Tool prefix is `mcp__<server>__`, where `<server>` is whatever name the server is registered under. The author registers it as `zs` (prefix `mcp__zs__`) because the default Claude plugin install uses a long name (`plugin_zscaler_zs`) that makes tool names too long and breaks calls. Detect the real prefix from your available tool list (look for `zpa_list_segment_groups`) and use it for every call below; do not assume `zs`. If the prefix is not `mcp__plugin_zscaler_zs__`, tell the user to update `allowed-tools` in this file's frontmatter to match.
 
 1. `zpa_list_segment_groups`, `page_size: 500`, `query: "[*].name"`
 2. `zpa_list_application_segments`, `page_size: 500`, `query: "[*].{n:name,g:segment_group_name,s:server_groups[*].name,d:domain_names,t:tcp_port_ranges,u:udp_port_ranges,on:enabled}"`

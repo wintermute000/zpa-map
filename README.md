@@ -10,7 +10,7 @@ It shows how access policy rules, segment groups, application segments (with the
 
 ## Read-only
 
-The skill only reads your tenant. A `PreToolUse` hook (`scripts/readonly-guard.js`) is registered in the skill's frontmatter and blocks every Zscaler MCP call except five list tools:
+The skill only reads your tenant. A `PreToolUse` hook (`scripts/readonly-guard.js`) is registered in the skill's frontmatter and blocks every Zscaler MCP call (any server name) except five list tools:
 
 `zpa_list_segment_groups`, `zpa_list_application_segments`, `zpa_list_server_groups`, `zpa_list_application_servers`, `zpa_list_access_policy_rules`
 
@@ -18,7 +18,9 @@ It is an allowlist, so new or renamed write tools are denied by default. Limits:
 
 ## Requirements
 
-- [Claude Code](https://claude.com/claude-code) with the Zscaler MCP plugin connected (tools named `mcp__plugin_zscaler_zs__*`)
+- [Claude Code](https://claude.com/claude-code) with the [Zscaler MCP server](https://github.com/zscaler/zscaler-mcp-server) connected
+- MCP server name: the hook and skill text work with any server name, but `allowed-tools` in `SKILL.md` lists full tool names and ships with `mcp__plugin_zscaler_zs__*`. Check yours with `/mcp` or the tool list (`mcp__<server>__zpa_list_segment_groups`) and edit `allowed-tools` to match (e.g. `mcp__zs__zpa_list_segment_groups`). Without a match you just get permission prompts; the guard still enforces read-only.
+  I register the server myself as `zs`: the default Claude plugin install gives it a long name (`plugin_zscaler_zs`), and the resulting long tool names break tool calls.
 - Node.js (runs `scripts/build.js` and the guard)
 - Graphviz `dot` (optional): without it you get no svg/png and the explorer starts with an unsorted layout
 
